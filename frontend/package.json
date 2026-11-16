@@ -1,0 +1,25 @@
+{
+  "name": "emedical-booking-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k -p \"[{name}]\" -n \"BACKEND,FRONTEND\" -c \"cyan.bold,magenta.bold\" \"npm:dev:backend\" \"npm:dev:fe\"",
+    "dev:fe": "vite",
+    "dev:backend": "node ../scripts/start-backend.js",
+    "build": "vite build",
+    "build:backend": "vite build && node -e \"const fs=require('fs'); fs.cpSync('dist', '../src/main/resources/static', {recursive: true, force: true}); console.log('Successfully copied to src/main/resources/static');\"",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "axios": "^1.6.8",
+    "lucide-react": "^0.344.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^9.1.2",
+    "vite": "^5.2.0"
+  }
+}

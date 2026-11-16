@@ -1,0 +1,17 @@
+{
+  "name": "booking",
+  "version": "1.0.0",
+  "description": "eMedical Booking Application",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -k -p \"[{name}]\" -n \"BACKEND,FRONTEND\" -c \"cyan.bold,magenta.bold\" \"npm:dev:backend\" \"npm:dev:frontend\"",
+    "dev:backend": "node scripts/start-backend.js",
+    "dev:frontend": "npm run dev:fe --prefix frontend",
+    "build:frontend": "npm run build --prefix frontend",
+    "build:backend": "npm run build:backend --prefix frontend",
+    "build": "npm run build:backend --prefix frontend && node -e \"const {spawn}=require('child_process'); const cmd=process.platform==='win32'?'mvnw.cmd':'./mvnw'; spawn(`${cmd} clean package -DskipTests`, {stdio:'inherit', shell:true}).on('exit', process.exit);\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
