@@ -28,25 +28,38 @@ public class Medical_recordsService {
             throw new RuntimeException("Không tìm thấy thông tin bệnh nhân");
         }
 
+        String patientName = medical_recordReponse.getUsername();
+        if (patientName == null && medical_recordReponse.getPatient_id() != null) {
+            patientName = userRepository.findById(medical_recordReponse.getPatient_id())
+                    .map(u -> u.getFull_name() != null ? u.getFull_name() : u.getUsername())
+                    .orElse(null);
+        }
+
         Medical_records medical_records = Medical_records.builder()
+                .patient_id(medical_recordReponse.getPatient_id())
+                .patientName(patientName)
+                .doctor_id(medical_recordReponse.getDoctorId())
+                .doctorName(medical_recordReponse.getDoctorUsername())
                 .reason(medical_recordReponse.getReason())
                 .diagnosis(medical_recordReponse.getDiagnosis())
                 .treatment(medical_recordReponse.getTreatment())
                 .prescription(medical_recordReponse.getPrescription())
                 .note(medical_recordReponse.getNote())
+                .created_at(java.time.LocalDate.now().toString())
                 .build();
 
         return medical_recordsRepository.save(medical_records);
     }
 
     public List<Medical_records> readMedical_records(Medical_recordReponse medical_recordReponse) {
-        log.info("Reading medical record ID: {}", medical_recordReponse.getMedical_recordId());
-        if (medical_recordReponse.getMedical_recordId() != null) {
+        if (medical_recordReponse != null && medical_recordReponse.getMedical_recordId() != null) {
+            log.info("Reading medical record ID: {}", medical_recordReponse.getMedical_recordId());
             return medical_recordsRepository
                     .findById(medical_recordReponse.getMedical_recordId())
                     .map(java.util.Collections::singletonList)
                     .orElse(java.util.Collections.emptyList());
         }
+        log.info("Reading all medical records");
         return medical_recordsRepository.findAll();
     }
 
@@ -61,6 +74,10 @@ public class Medical_recordsService {
         if (medical_recordReponse.getPrescription() != null) medical_records.setPrescription(medical_recordReponse.getPrescription());
         if (medical_recordReponse.getTreatment() != null) medical_records.setTreatment(medical_recordReponse.getTreatment());
         if (medical_recordReponse.getReason() != null) medical_records.setReason(medical_recordReponse.getReason());
+        if (medical_recordReponse.getPatient_id() != null) medical_records.setPatient_id(medical_recordReponse.getPatient_id());
+        if (medical_recordReponse.getUsername() != null) medical_records.setPatientName(medical_recordReponse.getUsername());
+        if (medical_recordReponse.getDoctorId() != null) medical_records.setDoctor_id(medical_recordReponse.getDoctorId());
+        if (medical_recordReponse.getDoctorUsername() != null) medical_records.setDoctorName(medical_recordReponse.getDoctorUsername());
 
         return medical_recordsRepository.save(medical_records);
     }

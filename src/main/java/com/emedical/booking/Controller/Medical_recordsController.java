@@ -43,11 +43,18 @@ public class Medical_recordsController {
         }
     }
 
-    // 2. Đọc hồ sơ bệnh án
-    @PostMapping("/read")
+    // 2. Đọc hồ sơ bệnh án (Hỗ trợ cả POST và GET)
+    @RequestMapping(value = {"/read", "/list"}, method = { RequestMethod.POST, RequestMethod.GET })
     public ResponseEntity<ResponseDTO<List<Medical_records>>> readMedical_records(
-            @RequestBody Medical_recordReponse medical_recordReponse) {
+            @RequestBody(required = false) Medical_recordReponse medical_recordReponse,
+            @RequestParam(required = false) Long medicalRecordId) {
         try {
+            if (medical_recordReponse == null) {
+                medical_recordReponse = new Medical_recordReponse();
+            }
+            if (medicalRecordId != null) {
+                medical_recordReponse.setMedical_recordId(medicalRecordId);
+            }
             List<Medical_records> medical_recordses = medical_recordsService.readMedical_records(
                     medical_recordReponse);
 
@@ -94,10 +101,17 @@ public class Medical_recordsController {
     }
 
     // 4. Xóa hồ sơ bệnh án
-    @DeleteMapping("/delete")
+    @RequestMapping(value = {"/delete", "/delete/{id}"}, method = { RequestMethod.DELETE, RequestMethod.POST })
     public ResponseEntity<ResponseDTO<Medical_records>> deleteMedical_records(
-            @RequestBody Medical_recordReponse medical_recordReponse) {
+            @PathVariable(required = false) Long id,
+            @RequestBody(required = false) Medical_recordReponse medical_recordReponse) {
         try {
+            if (medical_recordReponse == null) {
+                medical_recordReponse = new Medical_recordReponse();
+            }
+            if (id != null) {
+                medical_recordReponse.setMedical_recordId(id);
+            }
             Medical_records medical_records = medical_recordsService.deleteMedical_records(
                     medical_recordReponse);
 

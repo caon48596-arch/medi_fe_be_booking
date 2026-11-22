@@ -44,11 +44,18 @@ public class AppoinmentController {
         }
     }
 
-    // 2. Đọc danh sách lịch hẹn
-    @PostMapping("/read")
+    // 2. Đọc danh sách lịch hẹn (Hỗ trợ cả POST và GET)
+    @RequestMapping(value = {"/read", "/list"}, method = { RequestMethod.POST, RequestMethod.GET })
     public ResponseEntity<ResponseDTO<List<Appoinment>>> readAppoinments(
-            @RequestBody AppoinmentRequestDTO appoinmentRequestDTO) {
+            @RequestBody(required = false) AppoinmentRequestDTO appoinmentRequestDTO,
+            @RequestParam(required = false) Long patientId) {
         try {
+            if (appoinmentRequestDTO == null) {
+                appoinmentRequestDTO = new AppoinmentRequestDTO();
+            }
+            if (patientId != null) {
+                appoinmentRequestDTO.setPatienId(patientId);
+            }
             List<Appoinment> appoinments = appoinmentService.readAppoinments(appoinmentRequestDTO);
 
             ResponseDTO<List<Appoinment>> responseDTO = new ResponseDTO<>(
@@ -89,6 +96,28 @@ public class AppoinmentController {
                     null);
 
             return ResponseEntity.badRequest().body(responseDTO);
+        }
+    }
+
+    // 4. Hủy lịch hẹn (giải phóng slot)
+    @RequestMapping(value = "/cancel/{id}", method = { RequestMethod.POST, RequestMethod.PUT })
+    public ResponseEntity<ResponseDTO<Appoinment>> cancelAppointment(@PathVariable Long id) {
+        try {
+            Appoinment appoinment = appoinmentService.cancelAppointment(id);
+            return ResponseEntity.ok(new ResponseDTO<>(true, "Hủy lịch hẹn thành công", appoinment));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new ResponseDTO<>(false, e.getMessage(), null));
+        }
+    }
+
+    // 5. Xóa lịch hẹn
+    @DeleteMapping("/delete/{id}")
+    public ResponseEntity<ResponseDTO<Appoinment>> deleteAppointment(@PathVariable Long id) {
+        try {
+            Appoinment appoinment = appoinmentService.deleteAppointment(id);
+            return ResponseEntity.ok(new ResponseDTO<>(true, "Xóa lịch hẹn thành công", appoinment));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(new ResponseDTO<>(false, e.getMessage(), null));
         }
     }
 }

@@ -35,6 +35,12 @@ public class Medical_records implements Serializable {
     @JoinColumn(name = "medical_records")
     private Appoinment appoinment;
 
+    private Long patient_id;
+    private String patientName;
+    private Long doctor_id;
+    private String doctorName;
+    private String created_at;
+
     private String diagnosis;
     private String reason;
     private String treatment;

@@ -62,10 +62,16 @@ public class AppoinmentService {
     }
 
     public List<Appoinment> readAppoinments(AppoinmentRequestDTO appoinmentRequestDTO) {
+        if (appoinmentRequestDTO == null || appoinmentRequestDTO.getPatienId() == null) {
+            log.info("Reading all appointments");
+            return appoinmentRepository.findAll();
+        }
         log.info("Reading appointments for patient ID: {}", appoinmentRequestDTO.getPatienId());
         User user = userRepository.findById(appoinmentRequestDTO.getPatienId())
-                .orElseThrow(() -> new RuntimeException("Không tìm thấy thông tin bệnh nhân"));
-
+                .orElse(null);
+        if (user == null) {
+            return appoinmentRepository.findByUser_Id(appoinmentRequestDTO.getPatienId());
+        }
         return appoinmentRepository.findByUser_Id(user.getUser_id());
     }
 
@@ -80,6 +86,20 @@ public class AppoinmentService {
 
         if (appoinmentRequestDTO.getReason() != null) {
             existingAppointment.setReason(appoinmentRequestDTO.getReason());
+        }
+
+        if (appoinmentRequestDTO.getStatus() != null) {
+            existingAppointment.setStatus(appoinmentRequestDTO.getStatus());
+        }
+
+        if (appoinmentRequestDTO.getWorkDate() != null) {
+            existingAppointment.setDate(appoinmentRequestDTO.getWorkDate());
+        }
+
+        if (appoinmentRequestDTO.getStartTime() != null) {
+            existingAppointment.setStartTime(appoinmentRequestDTO.getStartTime());
+        } else if (appoinmentRequestDTO.getStarTime() != null) {
+            existingAppointment.setStartTime(appoinmentRequestDTO.getStarTime());
         }
 
         if (appoinmentRequestDTO.getSlotId() != null && !appoinmentRequestDTO.getSlotId().equals(existingAppointment.getDoctorSlot_id())) {
@@ -107,5 +127,36 @@ public class AppoinmentService {
         }
 
         return appoinmentRepository.save(existingAppointment);
+    }
+
+    public Appoinment cancelAppointment(Long appointmentId) {
+        log.info("Cancelling appointment ID: {}", appointmentId);
+        Appoinment appointment = appoinmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy lịch hẹn ID: " + appointmentId));
+
+        appointment.setStatus("CANCELLED");
+
+        if (appointment.getDoctorSlot() != null) {
+            DoctorSlot slot = appointment.getDoctorSlot();
+            slot.setBook(false);
+            doctorSlotRepository.save(slot);
+        }
+
+        return appoinmentRepository.save(appointment);
+    }
+
+    public Appoinment deleteAppointment(Long appointmentId) {
+        log.info("Deleting appointment ID: {}", appointmentId);
+        Appoinment appointment = appoinmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy lịch hẹn ID: " + appointmentId));
+
+        if (appointment.getDoctorSlot() != null) {
+            DoctorSlot slot = appointment.getDoctorSlot();
+            slot.setBook(false);
+            doctorSlotRepository.save(slot);
+        }
+
+        appoinmentRepository.delete(appointment);
+        return appointment;
     }
 }

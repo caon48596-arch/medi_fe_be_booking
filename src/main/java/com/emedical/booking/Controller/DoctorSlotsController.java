@@ -43,11 +43,18 @@ public class DoctorSlotsController {
         }
     }
 
-    // 2. Đọc danh sách slot khám
-    @PostMapping("/read")
+    // 2. Đọc danh sách slot khám (Hỗ trợ cả POST và GET)
+    @RequestMapping(value = "/read", method = { RequestMethod.POST, RequestMethod.GET })
     public ResponseEntity<ResponseDTO<List<DoctorSlot>>> readDoctorSlots(
-            @RequestBody GenerateSlotsDTO generateSlotsDTO) {
+            @RequestBody(required = false) GenerateSlotsDTO generateSlotsDTO,
+            @RequestParam(required = false) Long doctorId) {
         try {
+            if (generateSlotsDTO == null) {
+                generateSlotsDTO = new GenerateSlotsDTO();
+            }
+            if (doctorId != null) {
+                generateSlotsDTO.setDoctorId(doctorId);
+            }
             List<DoctorSlot> doctorSlots = doctorSlotsService.readDoctorSlots(generateSlotsDTO);
 
             ResponseDTO<List<DoctorSlot>> responseDTO = new ResponseDTO<>(
@@ -92,10 +99,17 @@ public class DoctorSlotsController {
     }
 
     // 4. Xóa slot khám
-    @DeleteMapping("/delete")
+    @RequestMapping(value = {"/delete", "/delete/{id}"}, method = { RequestMethod.DELETE, RequestMethod.POST })
     public ResponseEntity<ResponseDTO<DoctorSlot>> deleteDoctorSlot(
-            @RequestBody GenerateSlotsDTO generateSlotsDTO) {
+            @PathVariable(required = false) Long id,
+            @RequestBody(required = false) GenerateSlotsDTO generateSlotsDTO) {
         try {
+            if (generateSlotsDTO == null) {
+                generateSlotsDTO = new GenerateSlotsDTO();
+            }
+            if (id != null) {
+                generateSlotsDTO.setDoctorSlotId(id);
+            }
             DoctorSlot doctorSlot = doctorSlotsService.deleteDoctorSlot(generateSlotsDTO);
 
             ResponseDTO<DoctorSlot> responseDTO = new ResponseDTO<>(

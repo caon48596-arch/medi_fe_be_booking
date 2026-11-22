@@ -25,6 +25,7 @@ public class DoctorSlotsService {
 
     private final DoctorSlotRepository doctorSlotRepository;
     private final DoctorRepository doctorRepository;
+    private final com.emedical.booking.repository.AppoinmentRepository appoinmentRepository;
 
     public List<DoctorSlot> createDoctorSlots(GenerateSlotsDTO generateSlotsDTO) {
         log.info("Creating new doctor slots for doctorId: {}", generateSlotsDTO.getDoctorId());
@@ -72,10 +73,14 @@ public class DoctorSlotsService {
     }
 
     public List<DoctorSlot> readDoctorSlots(GenerateSlotsDTO generateSlotsDTO) {
+        if (generateSlotsDTO == null || generateSlotsDTO.getDoctorId() == null) {
+            log.info("Reading all slots");
+            return doctorSlotRepository.findAll();
+        }
         log.info("Reading all slots for doctorId: {}", generateSlotsDTO.getDoctorId());
         if (!doctorRepository.existsById(generateSlotsDTO.getDoctorId())) {
             log.warn("Doctor not exists");
-            throw new RuntimeException("Doctor is not found");
+            return List.of();
         }
         return doctorSlotRepository.findByDoctorId(generateSlotsDTO.getDoctorId());
     }
@@ -103,6 +108,12 @@ public class DoctorSlotsService {
         log.info("Deleting doctor slot ID: {}", generateSlotsDTO.getDoctorSlotId());
         DoctorSlot deleteDoctorSlot = doctorSlotRepository.findByDoctorSlot_Id(generateSlotsDTO.getDoctorSlotId())
                 .orElseThrow(() -> new RuntimeException("Doctor slot is not found"));
+
+        if (deleteDoctorSlot.getAppoinment() != null) {
+            com.emedical.booking.entity.Appoinment app = deleteDoctorSlot.getAppoinment();
+            app.setDoctorSlot(null);
+            appoinmentRepository.save(app);
+        }
 
         doctorSlotRepository.delete(deleteDoctorSlot);
         return deleteDoctorSlot;

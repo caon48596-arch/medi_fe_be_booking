@@ -10,6 +10,22 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState(() => localStorage.getItem('EMEDICAL_USER') || null);
   const [currentRole, setCurrentRole] = useState(() => localStorage.getItem('EMEDICAL_ROLE') || null);
 
+  // Countdown timer for session hold (09:38)
+  const [secondsLeft, setSecondsLeft] = useState(578); // 9m 38s
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSecondsLeft((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const formatTimer = (totalSeconds) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
   const handleLoginSuccess = (username, role) => {
     setCurrentUser(username);
     setCurrentRole(role);
@@ -35,8 +51,8 @@ export default function App() {
   };
 
   return (
-    <div className="app-container">
-      {/* Navigation Bar */}
+    <div className="medisession-app">
+      {/* Fixed Topbar & Left Sidebar */}
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -46,18 +62,30 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <main className="main-content">
-        {/* Banner giới thiệu ngắn gọn */}
-        <div style={{ marginBottom: '24px' }}>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--gray-900)' }}>
-            Hệ thống Đặt lịch Khám bệnh Y tế (E-Medical Booking)
-          </h1>
-          <p style={{ color: 'var(--gray-600)', fontSize: '0.95rem', marginTop: '4px' }}>
-            Giao diện kết nối trực tiếp với Spring Boot Backend (PostgreSQL, Redis Session, Spring Security).
-          </p>
+      <div className="main-wrapper">
+        {/* Session Top Alert Timer (Brand System Spec) */}
+        <div className="session-timer-bar">
+          <div className="session-timer-left">
+            <span
+              className="material-symbols-outlined"
+              style={{ color: 'var(--tertiary)', fontSize: '20px' }}
+            >
+              timer
+            </span>
+            <div>
+              <span className="timer-tag">Phiên đăng ký trực tuyến: </span>
+              <span>Hệ thống đang giữ chỗ tạm thời trong </span>
+              <strong className="timer-countdown">{formatTimer(secondsLeft)}</strong>
+              <span> phút.</span>
+            </div>
+          </div>
+          <div className="session-sync-right">
+            <span className="sync-dot"></span>
+            <span>Đồng bộ thời gian thực với phòng tiếp nhận</span>
+          </div>
         </div>
 
-        {/* Tab 1: Cổng Bệnh nhân */}
+        {/* Tab 1: Cổng Bệnh nhân (Exact design as screen.png) */}
         {activeTab === 'user' && (
           <UserSection
             currentUser={currentUser}
@@ -66,7 +94,7 @@ export default function App() {
           />
         )}
 
-        {/* Tab 2: Cổng Bác sĩ */}
+        {/* Tab 2: Cổng Bác sĩ (Doctor Portal) */}
         {activeTab === 'doctor' && (
           <DoctorSection
             currentUser={currentUser}
@@ -75,18 +103,13 @@ export default function App() {
           />
         )}
 
-        {/* Tab 3: Cổng Hồ sơ bệnh án */}
+        {/* Tab 3: Cổng Hồ sơ bệnh án & Lịch khám */}
         {activeTab === 'records' && (
           <MedicalRecordsSection
             currentUser={currentUser}
           />
         )}
-      </main>
-
-      {/* Footer */}
-      <footer style={{ borderTop: '1px solid var(--gray-200)', background: '#ffffff', padding: '16px', textAlign: 'center', fontSize: '0.85rem', color: 'var(--gray-500)' }}>
-        <p>E-Medical Booking Frontend • Sẵn sàng triển khai độc lập (Vite / Vercel / Nginx) hoặc nhúng cùng Spring Boot.</p>
-      </footer>
+      </div>
     </div>
   );
 }

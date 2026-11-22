@@ -14,4 +14,10 @@ public class BookingRequest {
     private String specialty;
     private LocalDate date;
     private String reason;
+    private Long doctorId;
+    private Long slotId;
+    private String startTime;
+    private String patientName;
+    private String phone;
+    private String email;
 }

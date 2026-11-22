@@ -1,74 +1,116 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Stethoscope,
-  LogIn,
-  UserPlus,
-  KeyRound,
-  CheckCircle,
-  AlertCircle,
-  PlusCircle,
-  Clock,
-  Calendar,
-  RefreshCw,
-  Trash2,
-  XCircle,
-  ArrowRight,
-} from 'lucide-react';
-import { doctorApi, slotApi } from '../services/api';
+import { doctorApi, slotApi, appointmentApi } from '../services/api';
+
+const HOSPITAL_NAME = 'Bệnh Viện Đa Khoa MediSession';
+
+const INTERNAL_DEPARTMENTS = [
+  'Khoa Tim Mạch',
+  'Khoa Nhi & Tiêm Chủng',
+  'Khoa Nội Tiết & Tiểu Đường',
+  'Khoa Thận & Tiết Niệu',
+  'Khoa Ngoại Tổng Quát',
+  'Khoa Thần Kinh',
+  'Khoa Tai Mũi Họng',
+  'Khoa Mắt',
+];
 
 export default function DoctorSection({
   currentUser,
   currentRole,
   onLoginSuccess,
 }) {
-  const [subTab, setSubTab] = useState(
-    currentRole === 'ROLE_DOCTOR' ? 'slots' : 'auth'
-  );
+  const isDoctorLoggedIn = Boolean(currentUser && currentRole === 'ROLE_DOCTOR');
+
+  // Sub Tab: 'slots' | 'appointments'
+  const [subTab, setSubTab] = useState('slots');
+
+  // Modal Auth State (đồng nhất 100% với UserSection)
+  const [modalAuth, setModalAuth] = useState(false);
   const [authMode, setAuthMode] = useState('login'); // 'login' | 'register' | 'otp'
 
   // Auth Form State
   const [authForm, setAuthForm] = useState({
     username: '',
+    fullName: '',
     email: '',
     password: '',
     confirePassword: '',
+    specialty: 'Khoa Tim Mạch',
+    room_number: 'Phòng 201 - Tầng 2',
+    price: 250000,
     otp: '',
   });
 
-  // Doctor ID input for API calls requiring doctorId
-  const [doctorId, setDoctorId] = useState('1');
+  // Doctor ID input for API calls
+  const [doctorId, setDoctorId] = useState('');
+  const [doctorInfo, setDoctorInfo] = useState(null);
 
   // Slot Generator Form
   const [slotForm, setSlotForm] = useState({
-    doctorId: '1',
+    doctorId: '',
     workdate: new Date().toISOString().split('T')[0],
     startShift: '08:00',
     endShift: '12:00',
     durationMinutes: 30,
   });
 
-  // Data lists
+  // Real Database Data lists
   const [slots, setSlots] = useState([]);
   const [doctorAppointments, setDoctorAppointments] = useState([]);
 
-  // Status
+  // Status & Toast (đồng nhất với UserSection)
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState(null);
+  const [toast, setToast] = useState(null);
 
-  const showMsg = (type, text) => {
-    setMessage({ type, text });
-    setTimeout(() => setMessage(null), 6000);
+  const showToast = (message, icon = 'check_circle') => {
+    setToast({ message, icon });
+    setTimeout(() => setToast(null), 4000);
   };
 
   useEffect(() => {
-    if (currentUser && currentRole === 'ROLE_DOCTOR') {
+    resolveDoctor();
+  }, [currentUser, currentRole]);
+
+  useEffect(() => {
+    if (doctorId) {
       loadSlots();
       loadAppointments();
     }
-  }, [currentUser, currentRole]);
+  }, [doctorId]);
 
-  // ==================== AUTH HANDLERS ====================
-  const handleRegister = async (e) => {
+  // Resolve Doctor ID from backend by currentUser username
+  const resolveDoctor = async () => {
+    try {
+      const res = await doctorApi.getAll();
+      if (res.data && res.data.length > 0) {
+        let matched = null;
+        if (currentUser && currentRole === 'ROLE_DOCTOR') {
+          matched = res.data.find(
+            (d) => d.username?.toLowerCase() === currentUser.toLowerCase()
+          );
+        }
+        if (matched) {
+          setDoctorInfo(matched);
+          const idStr = String(matched.doctor_id);
+          setDoctorId(idStr);
+          setSlotForm((prev) => ({ ...prev, doctorId: idStr }));
+        } else if (!isDoctorLoggedIn) {
+          setDoctorInfo(null);
+          setDoctorId('');
+        }
+      } else {
+        setDoctorInfo(null);
+        setDoctorId('');
+      }
+    } catch (e) {
+      console.warn('Lỗi phân giải thông tin bác sĩ:', e);
+    }
+  };
+
+  // ==================== AUTH HANDLERS (ĐỒNG NHẤT 100% VỚI USERSECTION) ====================
+
+  // 1. ĐĂNG KÝ BÁC SĨ NỘI BỘ
+  const handleRegisterSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
@@ -76,35 +118,25 @@ export default function DoctorSection({
         username: authForm.username,
         email: authForm.email,
         password: authForm.password,
+        confirmPassword: authForm.confirePassword,
         confirePassword: authForm.confirePassword,
+        specialty: authForm.specialty,
+        room_number: authForm.room_number,
+        price: Number(authForm.price) || 250000,
       });
-      showMsg('success', res.message || 'Đăng ký bác sĩ thành công! Hãy xác thực OTP.');
-      setAuthMode('otp');
-    } catch (err) {
-      showMsg('error', err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const handleVerifyOtp = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      const res = await doctorApi.verifyOtp({
-        email: authForm.email,
-        otp: authForm.otp,
-      });
-      showMsg('success', res.message || 'Xác thực OTP thành công! Giờ bạn có thể đăng nhập.');
+      showToast(res.message || 'Đăng ký tài khoản bác sĩ thành công! Vui lòng đăng nhập.', 'check_circle');
       setAuthMode('login');
+      setAuthForm((prev) => ({ ...prev, password: '', confirePassword: '', otp: '' }));
     } catch (err) {
-      showMsg('error', err.message);
+      showToast(err.message || 'Lỗi đăng ký bác sĩ', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleLogin = async (e) => {
+  // 2. ĐĂNG NHẬP BƯỚC 1: Nhập username + password -> nhận mã OTP xác nhận
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
@@ -112,13 +144,52 @@ export default function DoctorSection({
         username: authForm.username,
         password: authForm.password,
       });
-      showMsg('success', 'Bác sĩ đăng nhập thành công!');
+
+      // Nếu backend yêu cầu xác thực OTP (luồng chuẩn 2FA)
+      if (res.data?.requireOtp) {
+        if (res.data?.otp) {
+          setAuthForm((prev) => ({ ...prev, otp: String(res.data.otp) }));
+        }
+        showToast(
+          res.message || 'Mã OTP xác nhận đăng nhập Bác sĩ đã được gửi tới email! Vui lòng nhập OTP.',
+          'mark_email_read'
+        );
+        setAuthMode('otp');
+        return;
+      }
+
+      // Đăng nhập thành công ngay nếu không yêu cầu OTP
+      showToast('Đăng nhập Bác sĩ thành công!', 'verified');
       if (res.data) {
         onLoginSuccess(res.data.username, 'ROLE_DOCTOR');
-        setSubTab('slots');
       }
+      setModalAuth(false);
+      resolveDoctor();
     } catch (err) {
-      showMsg('error', err.message);
+      showToast(err.message || 'Lỗi đăng nhập', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 3. ĐĂNG NHẬP BƯỚC 2: Nhập OTP để hoàn tất ĐĂNG NHẬP
+  const handleOtpSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const res = await doctorApi.login({
+        username: authForm.username,
+        otp: Number(authForm.otp),
+      });
+
+      showToast(res.message || 'Xác nhận OTP thành công! Bác sĩ đăng nhập thành công.', 'check_circle');
+      if (res.data) {
+        onLoginSuccess(res.data.username, 'ROLE_DOCTOR');
+      }
+      setModalAuth(false);
+      resolveDoctor();
+    } catch (err) {
+      showToast(err.message || 'Mã OTP không chính xác hoặc đã hết hạn', 'error');
     } finally {
       setLoading(false);
     }
@@ -129,21 +200,20 @@ export default function DoctorSection({
     e.preventDefault();
     setLoading(true);
     try {
-      // Backend expects startShift and endShift with seconds e.g. "08:00:00"
       const formatTime = (time) => (time.length === 5 ? `${time}:00` : time);
 
       await slotApi.create({
-        doctorId: Number(slotForm.doctorId),
+        doctorId: Number(slotForm.doctorId || doctorId),
         workdate: slotForm.workdate,
         startShift: formatTime(slotForm.startShift),
         endShift: formatTime(slotForm.endShift),
         durationMinutes: Number(slotForm.durationMinutes),
       });
 
-      showMsg('success', 'Tạo danh sách ca khám thành công!');
+      showToast('Tạo danh sách ca khám thành công và đã lưu vào Database!', 'check_circle');
       loadSlots();
     } catch (err) {
-      showMsg('error', err.message);
+      showToast(err.message || 'Lỗi tạo slot khám', 'error');
     } finally {
       setLoading(false);
     }
@@ -152,16 +222,12 @@ export default function DoctorSection({
   const loadSlots = async () => {
     setLoading(true);
     try {
-      const username = currentUser || authForm.username;
-      if (username) {
-        const res = await doctorApi.getSlots(username);
-        setSlots(res.data || []);
-      } else if (doctorId) {
-        const res = await slotApi.read(Number(doctorId));
-        setSlots(res.data || []);
+      const res = await slotApi.read(doctorId ? Number(doctorId) : null);
+      if (res.data) {
+        setSlots(res.data);
       }
     } catch (err) {
-      showMsg('error', 'Không thể tải danh sách slots: ' + err.message);
+      console.warn('Load slots error:', err);
     } finally {
       setLoading(false);
     }
@@ -172,10 +238,10 @@ export default function DoctorSection({
     setLoading(true);
     try {
       await slotApi.delete(slotId);
-      showMsg('success', 'Đã xóa slot khám #' + slotId);
+      showToast('Đã xóa slot khám #' + slotId + ' khỏi Database', 'delete');
       loadSlots();
     } catch (err) {
-      showMsg('error', err.message);
+      showToast(err.message || 'Lỗi xóa slot', 'error');
     } finally {
       setLoading(false);
     }
@@ -183,13 +249,30 @@ export default function DoctorSection({
 
   // ==================== APPOINTMENTS HANDLERS ====================
   const loadAppointments = async () => {
-    if (!doctorId) return;
     setLoading(true);
     try {
-      const res = await doctorApi.getAppointments(Number(doctorId));
-      setDoctorAppointments(res.data || []);
+      const res = await doctorApi.getAppointments(doctorId ? Number(doctorId) : 1);
+      if (res.data) {
+        setDoctorAppointments(res.data);
+      }
     } catch (err) {
-      showMsg('error', 'Không thể tải lịch hẹn của bác sĩ: ' + err.message);
+      console.warn('Doctor appointments error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCompleteAppointment = async (appointmentId) => {
+    setLoading(true);
+    try {
+      await appointmentApi.update({
+        appoinmentId: appointmentId,
+        status: 'COMPLETED',
+      });
+      showToast('Đã hoàn tất ca khám cho bệnh nhân #' + appointmentId, 'check_circle');
+      loadAppointments();
+    } catch (err) {
+      showToast(err.message || 'Lỗi cập nhật lịch hẹn', 'error');
     } finally {
       setLoading(false);
     }
@@ -200,209 +283,241 @@ export default function DoctorSection({
     setLoading(true);
     try {
       await doctorApi.rejectAppointment(Number(doctorId), appointmentId);
-      showMsg('success', 'Đã từ chối và tự động chuyển giao lịch hẹn #' + appointmentId);
+      showToast('Đã từ chối và tự động chuyển giao lịch hẹn #' + appointmentId, 'swap_horiz');
       loadAppointments();
     } catch (err) {
-      showMsg('error', err.message);
+      showToast(err.message || 'Lỗi chuyển giao lịch hẹn', 'error');
     } finally {
       setLoading(false);
     }
   };
 
+  const docName = isDoctorLoggedIn ? (doctorInfo?.username || currentUser) : 'Chưa đăng nhập Bác sĩ';
+  const docSpecialty = doctorInfo?.specialty || (isDoctorLoggedIn ? 'Chuyên khoa' : '--');
+  const docRoom = doctorInfo?.room_number || (isDoctorLoggedIn ? 'Phòng trực ban' : '--');
+
   return (
-    <div>
-      {/* Alert Messages */}
-      {message && (
-        <div className={`alert ${message.type === 'success' ? 'alert-success' : 'alert-error'}`}>
-          {message.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
-          <span>{message.text}</span>
+    <div className="page-container">
+      {/* Toast Notice (Đồng nhất với UserSection) */}
+      {toast && (
+        <div className="toast-notice">
+          <span className="material-symbols-outlined" style={{ color: 'var(--primary-fixed)' }}>
+            {toast.icon}
+          </span>
+          <span>{toast.message}</span>
         </div>
       )}
 
-      {/* Sub Navigation */}
-      <div className="sub-tabs">
-        {currentRole !== 'ROLE_DOCTOR' && (
-          <button
-            className={`sub-tab-item ${subTab === 'auth' ? 'active' : ''}`}
-            onClick={() => setSubTab('auth')}
-          >
-            Đăng nhập / Đăng ký Bác sĩ
-          </button>
-        )}
-        <button
-          className={`sub-tab-item ${subTab === 'slots' ? 'active' : ''}`}
-          onClick={() => {
-            setSubTab('slots');
-            loadSlots();
-          }}
-        >
-          Quản lý Slot & Ca khám
-        </button>
-        <button
-          className={`sub-tab-item ${subTab === 'appointments' ? 'active' : ''}`}
-          onClick={() => {
-            setSubTab('appointments');
-            loadAppointments();
-          }}
-        >
-          Lịch hẹn bệnh nhân ({doctorAppointments.length})
-        </button>
-      </div>
+      {/* ==================== DOCTOR IDENTITY BANNER ==================== */}
+      <div className="patient-banner-card">
+        <div className="patient-banner-glow"></div>
 
-      {/* ================= TAB 1: AUTH BÁC SĨ ================= */}
-      {subTab === 'auth' && (
-        <div className="card" style={{ maxWidth: '480px', margin: '0 auto 24px auto' }}>
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-            <button
-              className={`btn ${authMode === 'login' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-              style={{ flex: 1 }}
-              onClick={() => setAuthMode('login')}
-            >
-              <LogIn size={16} /> Bác sĩ Đăng nhập
-            </button>
-            <button
-              className={`btn ${authMode === 'register' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-              style={{ flex: 1 }}
-              onClick={() => setAuthMode('register')}
-            >
-              <UserPlus size={16} /> Đăng ký
-            </button>
-            <button
-              className={`btn ${authMode === 'otp' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
-              style={{ flex: 1 }}
-              onClick={() => setAuthMode('otp')}
-            >
-              <KeyRound size={16} /> Nhập OTP
-            </button>
+        <div className="patient-info-left">
+          <div className="patient-avatar-box" style={{ color: 'var(--secondary)' }}>
+            <span className="material-symbols-outlined" style={{ fontSize: '36px' }}>
+              stethoscope
+            </span>
+            <div className="avatar-verified-badge" style={{ background: isDoctorLoggedIn ? 'var(--secondary)' : 'var(--outline)' }}>
+              {isDoctorLoggedIn ? '✓' : '!'}
+            </div>
           </div>
 
-          {authMode === 'login' && (
-            <form onSubmit={handleLogin}>
-              <h3 className="card-title"><LogIn size={20} /> Cổng đăng nhập Bác sĩ</h3>
-              <div className="form-group" style={{ marginBottom: '14px' }}>
-                <label>Tên đăng nhập (Username):</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={authForm.username}
-                  onChange={(e) => setAuthForm({ ...authForm, username: e.target.value })}
-                  placeholder="Ví dụ: bacsi_an"
-                  required
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: '18px' }}>
-                <label>Mật khẩu:</label>
-                <input
-                  type="password"
-                  className="form-control"
-                  value={authForm.password}
-                  onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
-              <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
-                {loading ? 'Đang xác thực...' : 'Đăng nhập Bác sĩ'}
-              </button>
-            </form>
-          )}
+          <div className="patient-meta-text">
+            <div className="patient-header-row">
+              <h1 className="patient-title">Cổng Điều Hành Bác Sĩ Nội Bộ • {HOSPITAL_NAME}</h1>
+              <span className={`pill-badge ${isDoctorLoggedIn ? 'pill-secondary' : 'pill-primary'}`}>
+                {isDoctorLoggedIn ? 'BÁC SĨ CHÍNH CHỦ' : 'CHƯA ĐĂNG NHẬP BÁC SĨ'}
+              </span>
+            </div>
 
-          {authMode === 'register' && (
-            <form onSubmit={handleRegister}>
-              <h3 className="card-title"><UserPlus size={20} /> Đăng ký tài khoản Bác sĩ</h3>
-              <div className="form-group" style={{ marginBottom: '12px' }}>
-                <label>Tên đăng nhập (Username):</label>
-                <input
-                  type="text"
-                  className="form-control"
-                  value={authForm.username}
-                  onChange={(e) => setAuthForm({ ...authForm, username: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: '12px' }}>
-                <label>Email bác sĩ:</label>
-                <input
-                  type="email"
-                  className="form-control"
-                  value={authForm.email}
-                  onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: '12px' }}>
-                <label>Mật khẩu:</label>
-                <input
-                  type="password"
-                  className="form-control"
-                  value={authForm.password}
-                  onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: '18px' }}>
-                <label>Xác nhận mật khẩu:</label>
-                <input
-                  type="password"
-                  className="form-control"
-                  value={authForm.confirePassword}
-                  onChange={(e) => setAuthForm({ ...authForm, confirePassword: e.target.value })}
-                  required
-                />
-              </div>
-              <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
-                {loading ? 'Đang gửi...' : 'Đăng ký Bác sĩ'}
-              </button>
-            </form>
-          )}
+            <div className="patient-details-line">
+              <span>
+                Bác sĩ trực:{' '}
+                <strong style={{ color: 'var(--on-surface)' }}>
+                  {isDoctorLoggedIn ? `BS. ${docName}` : 'Chưa đăng nhập'}
+                </strong>
+              </span>
+              <span className="meta-dot">•</span>
+              <span>Chuyên khoa: <strong>{docSpecialty}</strong></span>
+              <span className="meta-dot">•</span>
+              <span>
+                Phòng khám: <span className="mono-tag">{docRoom}</span>
+              </span>
+              <span className="meta-dot">•</span>
+              <span>
+                Mã Bác sĩ: <strong style={{ color: 'var(--primary)' }}>ID #{doctorId || '--'}</strong>
+              </span>
+            </div>
+          </div>
+        </div>
 
-          {authMode === 'otp' && (
-            <form onSubmit={handleVerifyOtp}>
-              <h3 className="card-title"><KeyRound size={20} /> Xác thực OTP Bác sĩ</h3>
-              <div className="form-group" style={{ marginBottom: '12px' }}>
-                <label>Email đã đăng ký:</label>
-                <input
-                  type="email"
-                  className="form-control"
-                  value={authForm.email}
-                  onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: '18px' }}>
-                <label>Mã OTP (6 chữ số):</label>
-                <input
-                  type="number"
-                  className="form-control"
-                  value={authForm.otp}
-                  onChange={(e) => setAuthForm({ ...authForm, otp: e.target.value })}
-                  placeholder="123456"
-                  required
-                />
-              </div>
-              <button type="submit" className="btn btn-primary" style={{ width: '100%' }} disabled={loading}>
-                {loading ? 'Đang xác thực...' : 'Xác thực OTP'}
-              </button>
-            </form>
-          )}
+        {/* Banner Right Actions (Đồng nhất với UserSection) */}
+        <div className="patient-actions-right">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              if (doctorId) {
+                loadSlots();
+                loadAppointments();
+                showToast('Đã làm mới dữ liệu ca khám và danh sách lịch hẹn!', 'refresh');
+              } else {
+                setModalAuth(true);
+              }
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ color: 'var(--secondary)' }}>
+              refresh
+            </span>
+            <span>Làm mới dữ liệu</span>
+          </button>
+
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              if (isDoctorLoggedIn) {
+                showToast(`Tài khoản Bác sĩ ${currentUser} đã đăng nhập chính chủ.`);
+              } else {
+                setModalAuth(true);
+              }
+            }}
+          >
+            <span className="material-symbols-outlined">
+              {isDoctorLoggedIn ? 'verified' : 'account_circle'}
+            </span>
+            <span>{isDoctorLoggedIn ? 'Bác sĩ chính chủ' : 'Đăng nhập / Đăng ký Bác sĩ'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Thông báo nếu chưa đăng nhập Bác sĩ */}
+      {!isDoctorLoggedIn && (
+        <div
+          className="card-section"
+          style={{
+            background: 'linear-gradient(135deg, rgba(0, 99, 152, 0.08) 0%, rgba(0, 104, 95, 0.05) 100%)',
+            border: '1px solid rgba(0, 99, 152, 0.2)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '18px 24px',
+            marginBottom: '4px',
+            borderRadius: '16px',
+            flexWrap: 'wrap',
+            gap: '14px',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div
+              style={{
+                width: '44px',
+                height: '44px',
+                borderRadius: '12px',
+                background: 'rgba(0, 99, 152, 0.15)',
+                color: 'var(--secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '26px' }}>
+                medical_information
+              </span>
+            </div>
+            <div>
+              <h3 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--on-surface)' }}>
+                Yêu cầu tài khoản Bác sĩ nội bộ {HOSPITAL_NAME}
+              </h3>
+              <p style={{ fontSize: '13px', color: 'var(--on-surface-variant)', marginTop: '2px' }}>
+                Đăng nhập hoặc đăng ký tài khoản Bác sĩ để thiết lập khung giờ khám (slots) và tiếp nhận bệnh nhân.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setModalAuth(true)}
+            style={{ height: '42px', padding: '0 20px' }}
+          >
+            <span className="material-symbols-outlined">how_to_reg</span>
+            <span>Đăng nhập / Đăng ký Bác sĩ</span>
+          </button>
         </div>
       )}
 
-      {/* ================= TAB 2: QUẢN LÝ SLOT ================= */}
-      {subTab === 'slots' && (
+      {/* ================= TAB SWITCHER CHO BÁC SĨ ================= */}
+      <div
+        className="card-section"
+        style={{
+          padding: '14px 20px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '12px',
+        }}
+      >
         <div>
-          {/* Form tạo Slot tự động */}
-          <div className="card">
-            <h3 className="card-title">
-              <PlusCircle size={20} /> Tạo khung giờ khám tự động (/doctor-slots/create)
-            </h3>
+          <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="material-symbols-outlined" style={{ color: 'var(--secondary)' }}>
+              clinical_notes
+            </span>
+            <span>Không Gian Làm Việc Bác Sĩ Nội Bộ</span>
+          </h2>
+          <p className="section-desc">{HOSPITAL_NAME} - Tự động đồng bộ và điều phối hàng đợi</p>
+        </div>
+
+        <div className="tab-switcher">
+          <button
+            type="button"
+            className={`tab-switcher-btn ${subTab === 'slots' ? 'active' : ''}`}
+            onClick={() => {
+              setSubTab('slots');
+              loadSlots();
+            }}
+          >
+            Quản lý Ca & Slot ({slots.length})
+          </button>
+          <button
+            type="button"
+            className={`tab-switcher-btn ${subTab === 'appointments' ? 'active' : ''}`}
+            onClick={() => {
+              setSubTab('appointments');
+              loadAppointments();
+            }}
+          >
+            Bệnh nhân đặt khám ({doctorAppointments.length})
+          </button>
+        </div>
+      </div>
+
+      {/* ================= TAB 1: QUẢN LÝ SLOT ================= */}
+      {subTab === 'slots' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Form Tạo Slots */}
+          <div className="card-section">
+            <div className="card-section-header">
+              <div className="section-title-wrap">
+                <div className="section-icon-badge" style={{ background: 'rgba(0, 99, 152, 0.1)', color: 'var(--secondary)' }}>
+                  <span className="material-symbols-outlined">add_alarm</span>
+                </div>
+                <div>
+                  <h2 className="section-title">Thiết Lập Khung Giờ Khám Nội Bộ (/doctor-slots/create)</h2>
+                  <p className="section-desc">{HOSPITAL_NAME} - Tự động chia slot theo thời lượng khám và lưu vào Database</p>
+                </div>
+              </div>
+            </div>
+
             <form onSubmit={handleCreateSlots}>
-              <div className="form-grid">
+              <div className="form-grid-3">
                 <div className="form-group">
-                  <label>Mã Bác sĩ (Doctor ID):</label>
+                  <label className="form-label">Mã Bác sĩ (Doctor ID):</label>
                   <input
                     type="number"
-                    className="form-control"
+                    className="form-input"
                     value={slotForm.doctorId}
                     onChange={(e) => {
                       setSlotForm({ ...slotForm, doctorId: e.target.value });
@@ -413,10 +528,10 @@ export default function DoctorSection({
                 </div>
 
                 <div className="form-group">
-                  <label>Ngày làm việc:</label>
+                  <label className="form-label">Ngày làm việc:</label>
                   <input
                     type="date"
-                    className="form-control"
+                    className="form-input"
                     value={slotForm.workdate}
                     onChange={(e) => setSlotForm({ ...slotForm, workdate: e.target.value })}
                     required
@@ -424,34 +539,12 @@ export default function DoctorSection({
                 </div>
 
                 <div className="form-group">
-                  <label>Giờ bắt đầu ca:</label>
-                  <input
-                    type="time"
-                    className="form-control"
-                    value={slotForm.startShift}
-                    onChange={(e) => setSlotForm({ ...slotForm, startShift: e.target.value })}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Giờ kết thúc ca:</label>
-                  <input
-                    type="time"
-                    className="form-control"
-                    value={slotForm.endShift}
-                    onChange={(e) => setSlotForm({ ...slotForm, endShift: e.target.value })}
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Thời lượng mỗi slot (phút):</label>
+                  <label className="form-label">Thời lượng mỗi slot (phút):</label>
                   <input
                     type="number"
                     min="10"
                     step="5"
-                    className="form-control"
+                    className="form-input"
                     value={slotForm.durationMinutes}
                     onChange={(e) => setSlotForm({ ...slotForm, durationMinutes: e.target.value })}
                     required
@@ -459,166 +552,568 @@ export default function DoctorSection({
                 </div>
               </div>
 
-              <button type="submit" className="btn btn-primary" disabled={loading}>
-                <Clock size={16} /> Tạo các Slot khám
-              </button>
+              <div className="form-grid-3" style={{ alignItems: 'flex-end' }}>
+                <div className="form-group">
+                  <label className="form-label">Giờ bắt đầu ca:</label>
+                  <input
+                    type="time"
+                    className="form-input"
+                    value={slotForm.startShift}
+                    onChange={(e) => setSlotForm({ ...slotForm, startShift: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Giờ kết thúc ca:</label>
+                  <input
+                    type="time"
+                    className="form-input"
+                    value={slotForm.endShift}
+                    onChange={(e) => setSlotForm({ ...slotForm, endShift: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <button type="submit" className="btn btn-primary" style={{ height: '48px' }} disabled={loading}>
+                  <span className="material-symbols-outlined">schedule_send</span>
+                  <span>{loading ? 'Đang tạo...' : 'Tạo các Slot khám (Lưu DB)'}</span>
+                </button>
+              </div>
             </form>
           </div>
 
-          {/* Danh sách Slots hiện có */}
-          <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 className="card-title" style={{ margin: 0, border: 'none', padding: 0 }}>
-                <Clock size={20} /> Danh sách ca khám đã tạo
-              </h3>
-              <div style={{ display: 'flex', gap: '8px' }}>
+          {/* Danh sách Slots */}
+          <div className="card-section">
+            <div className="card-section-header">
+              <div className="section-title-wrap">
+                <div className="section-icon-badge">
+                  <span className="material-symbols-outlined">view_agenda</span>
+                </div>
+                <div>
+                  <h3 className="section-title">Danh Sách Ca Khám Thực Tế Trong Database ({slots.length})</h3>
+                  <p className="section-desc">Theo dõi các slot trống và slot đã được người bệnh đặt tại {HOSPITAL_NAME}</p>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <input
                   type="number"
-                  className="form-control"
-                  style={{ width: '120px' }}
-                  placeholder="ID Bác sĩ"
+                  className="form-input"
+                  style={{ width: '120px', height: '36px' }}
+                  placeholder="Doctor ID"
                   value={doctorId}
                   onChange={(e) => setDoctorId(e.target.value)}
                 />
-                <button className="btn btn-outline btn-sm" onClick={loadSlots} disabled={loading}>
-                  <RefreshCw size={14} /> Tải lại
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline"
+                  onClick={loadSlots}
+                  disabled={loading}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                    refresh
+                  </span>
+                  <span>Tải lại</span>
                 </button>
               </div>
             </div>
 
             {slots.length === 0 ? (
-              <div className="empty-box">
-                <Clock size={48} />
-                <p>Chưa có slot khám nào được tạo cho bác sĩ này.</p>
-              </div>
+              <p style={{ color: 'var(--outline)', textAlign: 'center', padding: '30px 0' }}>
+                Chưa có slot khám nào trong Database cho Bác sĩ ID #{doctorId || '--'}. Hãy thiết lập khung giờ ở trên.
+              </p>
             ) : (
-              <div className="table-responsive">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Slot ID</th>
-                      <th>Ngày</th>
-                      <th>Giờ bắt đầu</th>
-                      <th>Giờ kết thúc</th>
-                      <th>Trạng thái đặt</th>
-                      <th>Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {slots.map((s) => {
-                      const id = s.DoctorSlot_Id || s.doctorSlot_Id || s.id;
-                      return (
-                        <tr key={id || Math.random()}>
-                          <td><strong>#{id}</strong></td>
-                          <td>{s.workDate || s.date || '---'}</td>
-                          <td>{s.startTime || '---'}</td>
-                          <td>{s.endTime || '---'}</td>
-                          <td>
-                            {s.book ? (
-                              <span className="badge badge-warning">Đã được đặt</span>
-                            ) : (
-                              <span className="badge badge-success">Còn trống</span>
-                            )}
-                          </td>
-                          <td>
-                            <button
-                              className="btn btn-danger btn-sm"
-                              onClick={() => handleDeleteSlot(id)}
-                              title="Xóa slot"
-                            >
-                              <Trash2 size={14} /> Xóa
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
+                {slots.map((s) => {
+                  const id = s.DoctorSlot_Id || s.doctorSlot_Id || s.id;
+                  return (
+                    <div
+                      key={id}
+                      style={{
+                        background: 'var(--surface)',
+                        borderRadius: '12px',
+                        padding: '14px 16px',
+                        border: '1px solid var(--surface-container-high)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <strong style={{ fontSize: '14px' }}>#{id}</strong>
+                          <span className={`pill-badge ${s.book ? 'pill-tertiary' : 'pill-primary'}`}>
+                            {s.book ? 'Đã được đặt' : 'Còn trống'}
+                          </span>
+                        </div>
+                        <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--primary)', marginTop: '4px' }}>
+                          {s.startTime ? s.startTime.substring(0, 5) : '08:00'} - {s.endTime ? s.endTime.substring(0, 5) : '08:30'}
+                        </p>
+                        <p style={{ fontSize: '11px', color: 'var(--outline)' }}>
+                          Ngày: {s.workDate || s.date}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="file-icon-btn delete"
+                        title="Xóa slot khám khỏi Database"
+                        onClick={() => handleDeleteSlot(id)}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                          delete
+                        </span>
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* ================= TAB 3: LỊCH HẸN BỆNH NHÂN ================= */}
+      {/* ================= TAB 2: LỊCH HẸN BỆNH NHÂN ================= */}
       {subTab === 'appointments' && (
-        <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 className="card-title" style={{ margin: 0, border: 'none', padding: 0 }}>
-              <Calendar size={20} /> Lịch khám của bệnh nhân (/doctor/{'{doctorId}'}/appointments)
-            </h3>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input
-                type="number"
-                className="form-control"
-                style={{ width: '130px' }}
-                placeholder="Doctor ID"
-                value={doctorId}
-                onChange={(e) => setDoctorId(e.target.value)}
-              />
-              <button className="btn btn-outline btn-sm" onClick={loadAppointments} disabled={loading}>
-                <RefreshCw size={14} /> Làm mới
-              </button>
+        <div className="card-section">
+          <div className="card-section-header">
+            <div className="section-title-wrap">
+              <div className="section-icon-badge">
+                <span className="material-symbols-outlined">event_available</span>
+              </div>
+              <div>
+                <h3 className="section-title">Danh Sách Bệnh Nhân Đặt Hẹn Trong Database ({doctorAppointments.length})</h3>
+                <p className="section-desc">Bác sĩ tiếp nhận khám, hoàn tất hoặc chuyển giao trong nội bộ {HOSPITAL_NAME}</p>
+              </div>
             </div>
+
+            <button
+              type="button"
+              className="btn btn-sm btn-outline"
+              onClick={loadAppointments}
+              disabled={loading}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                refresh
+              </span>
+              <span>Làm mới</span>
+            </button>
           </div>
 
           {doctorAppointments.length === 0 ? (
-            <div className="empty-box">
-              <Calendar size={48} />
-              <p>Chưa có lịch hẹn nào của bệnh nhân cho bác sĩ #{doctorId}.</p>
-            </div>
+            <p style={{ color: 'var(--outline)', textAlign: 'center', padding: '30px 0' }}>
+              Hiện chưa có lịch hẹn nào của bệnh nhân cho Bác sĩ ID #{doctorId || '--'}.
+            </p>
           ) : (
-            <div className="table-responsive">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Lịch #</th>
-                    <th>Bệnh nhân</th>
-                    <th>Email / SĐT</th>
-                    <th>Ngày hẹn</th>
-                    <th>Giờ hẹn</th>
-                    <th>Lý do khám</th>
-                    <th>Trạng thái</th>
-                    <th>Xử lý</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {doctorAppointments.map((app) => (
-                    <tr key={app.appoinments_id || Math.random()}>
-                      <td><strong>#{app.appoinments_id}</strong></td>
-                      <td>{app.patientName || app.user?.username || '---'}</td>
-                      <td>{app.email || app.phone || '---'}</td>
-                      <td>{app.date || '---'}</td>
-                      <td>{app.startTime || '---'}</td>
-                      <td>{app.reason || '---'}</td>
-                      <td>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {doctorAppointments.map((app) => (
+                <div
+                  key={app.appoinments_id}
+                  style={{
+                    background: 'var(--surface)',
+                    borderRadius: '14px',
+                    padding: '16px 20px',
+                    border: '1px solid var(--surface-container-high)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '16px',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div
+                      style={{
+                        width: '44px',
+                        height: '44px',
+                        borderRadius: '50%',
+                        background: 'rgba(0, 104, 95, 0.1)',
+                        color: 'var(--primary)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: 700,
+                      }}
+                    >
+                      <span className="material-symbols-outlined">person</span>
+                    </div>
+
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <strong style={{ fontSize: '15px' }}>
+                          {app.patientName || app.user?.username || 'Bệnh nhân'}
+                        </strong>
+                        <span className="mono-tag">#{app.appoinments_id}</span>
                         <span
-                          className={`badge ${
+                          className={`pill-badge ${
                             app.status === 'CONFIRMED'
-                              ? 'badge-success'
+                              ? 'pill-primary'
+                              : app.status === 'COMPLETED'
+                              ? 'pill-secondary'
                               : app.status?.includes('REJECT')
-                              ? 'badge-danger'
-                              : 'badge-info'
+                              ? 'pill-error'
+                              : 'pill-tertiary'
                           }`}
                         >
                           {app.status}
                         </span>
-                      </td>
-                      <td>
-                        <button
-                          className="btn btn-warning btn-sm"
-                          onClick={() => handleReject(app.appoinments_id)}
-                          title="Từ chối và tự động chuyển bác sĩ khác cùng chuyên khoa"
-                        >
-                          <XCircle size={14} /> Từ chối / Chuyển
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+
+                      <p style={{ fontSize: '13px', color: 'var(--on-surface-variant)', marginTop: '4px' }}>
+                        <strong>Lý do khám:</strong> {app.reason}
+                      </p>
+                      <p style={{ fontSize: '12px', color: 'var(--outline)', marginTop: '2px' }}>
+                        Giờ hẹn: {app.startTime ? app.startTime.substring(0, 5) : '---'} • Ngày {app.date} • Liên hệ: {app.email || app.phone || 'Chính chủ'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    {app.status !== 'COMPLETED' && (
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-primary"
+                        onClick={() => handleCompleteAppointment(app.appoinments_id)}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                          check_circle
+                        </span>
+                        <span>Hoàn tất khám</span>
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-danger-light"
+                      onClick={() => handleReject(app.appoinments_id)}
+                      title="Từ chối và tự động chuyển giao lịch hẹn"
+                    >
+                      <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>
+                        swap_horiz
+                      </span>
+                      <span>Chuyển giao</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ==================== MODAL: AUTHENTICATION BÁC SĨ (LOGIN VỚI OTP / ĐĂNG KÝ) ==================== */}
+      {modalAuth && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <div className="modal-title">
+                <span className="material-symbols-outlined" style={{ color: 'var(--secondary)' }}>
+                  stethoscope
+                </span>
+                <span>Cổng Bác Sĩ • {HOSPITAL_NAME}</span>
+              </div>
+              <button
+                type="button"
+                className="icon-btn"
+                onClick={() => {
+                  setModalAuth(false);
+                  setAuthMode('login');
+                }}
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            {/* Switch tabs (Đồng nhất 100% với UserSection) */}
+            {authMode !== 'otp' ? (
+              <div className="tab-switcher" style={{ width: '100%', marginBottom: '16px' }}>
+                <button
+                  type="button"
+                  style={{ flex: 1 }}
+                  className={`tab-switcher-btn ${authMode === 'login' ? 'active' : ''}`}
+                  onClick={() => setAuthMode('login')}
+                >
+                  Đăng nhập Bác sĩ
+                </button>
+                <button
+                  type="button"
+                  style={{ flex: 1 }}
+                  className={`tab-switcher-btn ${authMode === 'register' ? 'active' : ''}`}
+                  onClick={() => setAuthMode('register')}
+                >
+                  Đăng ký Bác sĩ nội bộ
+                </button>
+              </div>
+            ) : (
+              <div
+                style={{
+                  background: 'var(--surface-container-low)',
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  marginBottom: '16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span className="material-symbols-outlined" style={{ color: 'var(--secondary)' }}>security</span>
+                  <span style={{ fontSize: '13px', fontWeight: 600 }}>Bước 2: Nhập OTP xác nhận đăng nhập Bác sĩ</span>
+                </div>
+                <button
+                  type="button"
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--primary)',
+                    cursor: 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                  }}
+                  onClick={() => setAuthMode('login')}
+                >
+                  Đổi tài khoản
+                </button>
+              </div>
+            )}
+
+            {/* BƯỚC 1: FORM ĐĂNG NHẬP BÁC SĨ (Username + Password) */}
+            {authMode === 'login' && (
+              <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div className="form-group">
+                  <label className="form-label">Tên đăng nhập Bác sĩ (Username):</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={authForm.username}
+                    onChange={(e) => setAuthForm({ ...authForm, username: e.target.value })}
+                    placeholder="Ví dụ: bacsi_an"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Mật khẩu:</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    value={authForm.password}
+                    onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+
+                <div
+                  style={{
+                    padding: '8px 12px',
+                    background: 'var(--surface-container-low)',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    color: 'var(--outline)',
+                  }}
+                >
+                  <span
+                    className="material-symbols-outlined"
+                    style={{ fontSize: '15px', verticalAlign: 'middle', marginRight: '4px', color: 'var(--secondary)' }}
+                  >
+                    info
+                  </span>
+                  Sau khi nhập tài khoản và mật khẩu, hệ thống sẽ gửi mã OTP xác nhận tới email của Bác sĩ để hoàn tất đăng nhập.
+                </div>
+
+                <button type="submit" className="btn btn-primary" style={{ height: '46px', marginTop: '6px' }} disabled={loading}>
+                  <span className="material-symbols-outlined">send_to_mobile</span>
+                  <span>{loading ? 'Đang gửi...' : 'Đăng nhập & Gửi mã OTP xác nhận'}</span>
+                </button>
+              </form>
+            )}
+
+            {/* FORM ĐĂNG KÝ BÁC SĨ NỘI BỘ (Không đòi hỏi OTP khi đăng ký) */}
+            {authMode === 'register' && (
+              <form onSubmit={handleRegisterSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label">Tên tài khoản Bác sĩ (Username) *:</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={authForm.username}
+                    onChange={(e) => setAuthForm({ ...authForm, username: e.target.value })}
+                    placeholder="bacsi_nguyenvanan"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Chuyên khoa khám nội bộ *:</label>
+                  <div className="select-wrapper">
+                    <select
+                      className="form-select"
+                      value={authForm.specialty}
+                      onChange={(e) => setAuthForm({ ...authForm, specialty: e.target.value })}
+                      required
+                    >
+                      {INTERNAL_DEPARTMENTS.map((dept, idx) => (
+                        <option key={idx} value={dept}>
+                          {dept}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="material-symbols-outlined select-arrow">arrow_drop_down</span>
+                  </div>
+                </div>
+
+                <div className="form-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div className="form-group">
+                    <label className="form-label">Phòng khám trực:</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      value={authForm.room_number}
+                      onChange={(e) => setAuthForm({ ...authForm, room_number: e.target.value })}
+                      placeholder="Phòng 201 - Tầng 2"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Phí khám (VND):</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      value={authForm.price}
+                      onChange={(e) => setAuthForm({ ...authForm, price: e.target.value })}
+                      placeholder="250000"
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Email cơ quan nhận OTP *:</label>
+                  <input
+                    type="email"
+                    className="form-input"
+                    value={authForm.email}
+                    onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
+                    placeholder="doctor.an@hospital.vn"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Mật khẩu *:</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    value={authForm.password}
+                    onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Xác nhận mật khẩu *:</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    value={authForm.confirePassword}
+                    onChange={(e) => setAuthForm({ ...authForm, confirePassword: e.target.value })}
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+
+                <button type="submit" className="btn btn-primary" style={{ height: '46px', marginTop: '6px' }} disabled={loading}>
+                  <span className="material-symbols-outlined">how_to_reg</span>
+                  <span>{loading ? 'Đang tạo...' : 'Hoàn tất đăng ký Bác sĩ nội bộ'}</span>
+                </button>
+              </form>
+            )}
+
+            {/* BƯỚC 2: FORM XÁC NHẬN MÃ OTP ĐĂNG NHẬP BÁC SĨ */}
+            {authMode === 'otp' && (
+              <form onSubmit={handleOtpSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ textAlign: 'center', padding: '10px 0' }}>
+                  <div
+                    style={{
+                      width: '56px',
+                      height: '56px',
+                      borderRadius: '50%',
+                      background: 'rgba(0, 99, 152, 0.1)',
+                      color: 'var(--secondary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      margin: '0 auto 10px',
+                    }}
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '32px' }}>
+                      lock_person
+                    </span>
+                  </div>
+                  <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Xác Nhận OTP Đăng Nhập Bác Sĩ</h3>
+                  <p style={{ fontSize: '12.5px', color: 'var(--on-surface-variant)', marginTop: '4px' }}>
+                    Bác sĩ: <strong>{authForm.username}</strong>. Hãy nhập mã OTP 6 chữ số vừa nhận để hoàn tất đăng nhập.
+                  </p>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label" style={{ textAlign: 'center' }}>Mã OTP xác nhận (6 chữ số):</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    style={{
+                      textAlign: 'center',
+                      fontSize: '22px',
+                      letterSpacing: '6px',
+                      fontWeight: 700,
+                      height: '52px',
+                    }}
+                    value={authForm.otp}
+                    onChange={(e) => setAuthForm({ ...authForm, otp: e.target.value })}
+                    placeholder="123456"
+                    required
+                    autoFocus
+                  />
+                </div>
+
+                <button type="submit" className="btn btn-primary" style={{ height: '48px', marginTop: '4px' }} disabled={loading}>
+                  <span className="material-symbols-outlined">check_circle</span>
+                  <span>{loading ? 'Đang xác thực...' : 'Xác nhận OTP & Đăng nhập Bác sĩ'}</span>
+                </button>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px' }}>
+                  <button
+                    type="button"
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--outline)',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                    }}
+                    onClick={() => setAuthMode('login')}
+                  >
+                    ← Quay lại đăng nhập
+                  </button>
+                  <button
+                    type="button"
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--primary)',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                    }}
+                    onClick={handleLoginSubmit}
+                  >
+                    Gửi lại mã OTP
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
         </div>
       )}
     </div>

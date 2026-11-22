@@ -18,4 +18,7 @@ public class AppoinmentRequestDTO {
     private String reason;
     private LocalDate workDate;
     private LocalTime starTime;
+    private LocalTime startTime;
+    private Long doctorId;
+    private String status;
 }

@@ -11,5 +11,13 @@ public class RegisterRequest {
     private String username;
     private String password;
     private String confirePassword;
+    private String confirmPassword;
     private String email;
+    private String fullName;
+    private String phone;
+    private String address;
+
+    public String getEffectiveConfirmPassword() {
+        return confirmPassword != null && !confirmPassword.isBlank() ? confirmPassword : confirePassword;
+    }
 }

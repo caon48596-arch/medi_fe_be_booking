@@ -57,15 +57,29 @@ public class SecurityConfig {
                                 "/auth/**",
                                 "/user/register",
                                 "/user/verify-otp",
+                                "/user/verify-login-otp",
                                 "/user/login",
+                                "/user/logout",
+                                "/user/profile",
+                                "/user/get",
+                                "/user/booking",
+                                "/user/all",
                                 "/doctor/register",
                                 "/doctor/verify-otp",
-                                "/doctor/login")
+                                "/doctor/verify-login-otp",
+                                "/doctor/login",
+                                "/doctor/logout",
+                                "/doctor/list",
+                                "/doctor/all",
+                                "/doctor/*/slots",
+                                "/doctor-slots/**",
+                                "/appointment/**",
+                                "/medical-records/**")
                         .permitAll()
 
                         .requestMatchers("/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/doctor/**").hasRole("DOCTOR")
-                        .requestMatchers("/user/**").hasRole("USER")
+                        .requestMatchers("/doctor/**").hasAnyRole("DOCTOR", "ADMIN")
+                        .requestMatchers("/user/**").hasAnyRole("USER", "DOCTOR", "ADMIN")
 
                         .anyRequest().authenticated())
 
