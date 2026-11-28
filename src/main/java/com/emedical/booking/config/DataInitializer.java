@@ -5,6 +5,7 @@ import java.util.List;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
 
+import com.emedical.booking.entity.DoctorSlot;
 import com.emedical.booking.repository.AppoinmentRepository;
 import com.emedical.booking.repository.DoctorRepository;
 import com.emedical.booking.repository.DoctorSlotRepository;
@@ -19,6 +20,8 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class DataInitializer implements CommandLineRunner {
 
+    private static final List<String> MOCK_DOCTOR_USERNAMES = List.of("bacsi_an", "bacsi_mai", "bacsi_tung");
+
     private final UserRepository userRepository;
     private final DoctorRepository doctorRepository;
     private final DoctorSlotRepository doctorSlotRepository;
@@ -26,54 +29,46 @@ public class DataInitializer implements CommandLineRunner {
     private final Medical_recordsRepository medicalRecordsRepository;
 
     @Override
-    public void run(String... args) throws Exception {
+    public void run(String... args) {
         log.info("Bắt đầu kiểm tra và dọn dẹp toàn bộ dữ liệu mẫu/ảo trong cơ sở dữ liệu...");
 
         try {
-            // 1. Dọn dẹp dữ liệu lịch hẹn ảo cũ (nếu có từ trước)
             appoinmentRepository.findAll().forEach(app -> {
                 String patient = app.getPatientName();
                 String reason = app.getReason();
                 if ("tranminhquan".equalsIgnoreCase(patient)
                         || "Trần Minh Quân".equalsIgnoreCase(patient)
-                        || (reason != null && (
-                            reason.contains("Khám định kỳ huyết áp")
-                            || reason.contains("Tư vấn liệu trình dị ứng")
-                            || reason.contains("Khám Thần Kinh")))) {
+                        || (reason != null && (reason.contains("Khám định kỳ huyết áp")
+                                || reason.contains("Tư vấn liệu trình dị ứng")
+                                || reason.contains("Khám Thần Kinh")))) {
                     log.info("Xóa lịch hẹn mẫu: ID #{}", app.getAppoinments_id());
                     appoinmentRepository.delete(app);
                 }
             });
 
-            // 2. Dọn dẹp bệnh án ảo cũ (nếu có từ trước)
             medicalRecordsRepository.findAll().forEach(rec -> {
                 String patient = rec.getPatientName();
                 String diag = rec.getDiagnosis();
                 if ("Trần Minh Quân".equalsIgnoreCase(patient)
                         || "tranminhquan".equalsIgnoreCase(patient)
-                        || (diag != null && (
-                            diag.contains("Tăng huyết áp vô căn")
-                            || diag.contains("Rối loạn lipid máu")))) {
+                        || (diag != null && (diag.contains("Tăng huyết áp vô căn")
+                                || diag.contains("Rối loạn lipid máu")))) {
                     log.info("Xóa hồ sơ bệnh án mẫu: ID #{}", rec.getMedical_id());
                     medicalRecordsRepository.delete(rec);
                 }
             });
 
-            // 3. Dọn dẹp tài khoản bệnh nhân ảo cũ (tranminhquan)
             userRepository.findByUsername("tranminhquan").ifPresent(user -> {
                 log.info("Xóa tài khoản bệnh nhân mẫu: tranminhquan");
                 userRepository.delete(user);
             });
 
-            // 4. Dọn dẹp các bác sĩ ảo mặc định và các slots ảo kèm theo nếu không có lịch hẹn thật
-            List<String> mockDoctors = List.of("bacsi_an", "bacsi_mai", "bacsi_tung");
-            for (String mockDoc : mockDoctors) {
+            for (String mockDoc : MOCK_DOCTOR_USERNAMES) {
                 doctorRepository.findByUsername(mockDoc).ifPresent(doc -> {
-                    doctorSlotRepository.findAll().forEach(slot -> {
-                        if (slot.getDoctor() != null && mockDoc.equals(slot.getDoctor().getUsername())) {
-                            doctorSlotRepository.delete(slot);
-                        }
-                    });
+                    List<DoctorSlot> slots = doctorSlotRepository.findByDoctorUsername(mockDoc);
+                    if (!slots.isEmpty()) {
+                        doctorSlotRepository.deleteAll(slots);
+                    }
                     log.info("Xóa tài khoản bác sĩ mẫu: {}", mockDoc);
                     doctorRepository.delete(doc);
                 });

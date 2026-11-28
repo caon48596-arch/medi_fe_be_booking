@@ -4,16 +4,19 @@ import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
+import com.emedical.booking.service.notification.OtpNotificationSender;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class EmailService {
+public class EmailService implements OtpNotificationSender {
 
     private final JavaMailSender mailSender;
 
+    @Override
     public void sendLoginOtp(String email, int otp, String roleName) {
         if (email == null || email.isBlank()) {
             log.warn("Email trống, bỏ qua gửi email OTP");

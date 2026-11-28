@@ -3,7 +3,14 @@ package com.emedical.booking.Controller;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import com.emedical.booking.dto.Medical_recorDTO.Medical_recordReponse;
 import com.emedical.booking.dto.ResponseDTO.ResponseDTO;
@@ -19,116 +26,39 @@ public class Medical_recordsController {
 
     private final Medical_recordsService medical_recordsService;
 
-    // 1. Tạo hồ sơ bệnh án
     @PostMapping("/create")
     public ResponseEntity<ResponseDTO<Medical_records>> createMedical(
             @RequestBody Medical_recordReponse medical_recordReponse) {
-        try {
-            Medical_records medical_records = medical_recordsService.createMedical(medical_recordReponse);
-
-            ResponseDTO<Medical_records> responseDTO = new ResponseDTO<>(
-                    true,
-                    "Creating medical record successfully",
-                    medical_records);
-
-            return ResponseEntity.ok(responseDTO);
-
-        } catch (Exception e) {
-            ResponseDTO<Medical_records> responseDTO = new ResponseDTO<>(
-                    false,
-                    e.getMessage(),
-                    null);
-
-            return ResponseEntity.badRequest().body(responseDTO);
-        }
+        Medical_records medical_records = medical_recordsService.createMedical(medical_recordReponse);
+        return ResponseEntity.ok(new ResponseDTO<>(true, "Creating medical record successfully", medical_records));
     }
 
-    // 2. Đọc hồ sơ bệnh án (Hỗ trợ cả POST và GET)
     @RequestMapping(value = {"/read", "/list"}, method = { RequestMethod.POST, RequestMethod.GET })
     public ResponseEntity<ResponseDTO<List<Medical_records>>> readMedical_records(
             @RequestBody(required = false) Medical_recordReponse medical_recordReponse,
             @RequestParam(required = false) Long medicalRecordId) {
-        try {
-            if (medical_recordReponse == null) {
-                medical_recordReponse = new Medical_recordReponse();
-            }
-            if (medicalRecordId != null) {
-                medical_recordReponse.setMedical_recordId(medicalRecordId);
-            }
-            List<Medical_records> medical_recordses = medical_recordsService.readMedical_records(
-                    medical_recordReponse);
-
-            ResponseDTO<List<Medical_records>> responseDTO = new ResponseDTO<>(
-                    true,
-                    "Reading medical records successfully",
-                    medical_recordses);
-
-            return ResponseEntity.ok(responseDTO);
-
-        } catch (Exception e) {
-            ResponseDTO<List<Medical_records>> responseDTO = new ResponseDTO<>(
-                    false,
-                    e.getMessage(),
-                    null);
-
-            return ResponseEntity.badRequest().body(responseDTO);
-        }
+        Long targetRecordId = medicalRecordId != null
+                ? medicalRecordId
+                : (medical_recordReponse != null ? medical_recordReponse.getMedical_recordId() : null);
+        List<Medical_records> records = medical_recordsService.readMedicalRecords(targetRecordId);
+        return ResponseEntity.ok(new ResponseDTO<>(true, "Reading medical records successfully", records));
     }
 
-    // 3. Cập nhật hồ sơ bệnh án
     @PutMapping("/update")
     public ResponseEntity<ResponseDTO<Medical_records>> updateMedical_records(
             @RequestBody Medical_recordReponse medical_recordReponse) {
-        try {
-            Medical_records medical_records = medical_recordsService.updatMedical_records(
-                    medical_recordReponse);
-
-            ResponseDTO<Medical_records> responseDTO = new ResponseDTO<>(
-                    true,
-                    "Updating medical record successfully",
-                    medical_records);
-
-            return ResponseEntity.ok(responseDTO);
-
-        } catch (Exception e) {
-            ResponseDTO<Medical_records> responseDTO = new ResponseDTO<>(
-                    false,
-                    e.getMessage(),
-                    null);
-
-            return ResponseEntity.badRequest().body(responseDTO);
-        }
+        Medical_records medical_records = medical_recordsService.updatMedical_records(medical_recordReponse);
+        return ResponseEntity.ok(new ResponseDTO<>(true, "Updating medical record successfully", medical_records));
     }
 
-    // 4. Xóa hồ sơ bệnh án
     @RequestMapping(value = {"/delete", "/delete/{id}"}, method = { RequestMethod.DELETE, RequestMethod.POST })
     public ResponseEntity<ResponseDTO<Medical_records>> deleteMedical_records(
             @PathVariable(required = false) Long id,
             @RequestBody(required = false) Medical_recordReponse medical_recordReponse) {
-        try {
-            if (medical_recordReponse == null) {
-                medical_recordReponse = new Medical_recordReponse();
-            }
-            if (id != null) {
-                medical_recordReponse.setMedical_recordId(id);
-            }
-            Medical_records medical_records = medical_recordsService.deleteMedical_records(
-                    medical_recordReponse);
-
-            ResponseDTO<Medical_records> responseDTO = new ResponseDTO<>(
-                    true,
-                    "Deleting medical record successfully",
-                    medical_records);
-
-            return ResponseEntity.ok(responseDTO);
-
-        } catch (Exception e) {
-            ResponseDTO<Medical_records> responseDTO = new ResponseDTO<>(
-                    false,
-                    e.getMessage(),
-                    null);
-
-            return ResponseEntity.badRequest().body(responseDTO);
-        }
+        Long targetRecordId = id != null
+                ? id
+                : (medical_recordReponse != null ? medical_recordReponse.getMedical_recordId() : null);
+        Medical_records medical_records = medical_recordsService.deleteMedicalRecord(targetRecordId);
+        return ResponseEntity.ok(new ResponseDTO<>(true, "Deleting medical record successfully", medical_records));
     }
 }

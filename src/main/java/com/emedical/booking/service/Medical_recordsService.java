@@ -1,11 +1,14 @@
 package com.emedical.booking.service;
 
+import java.time.LocalDate;
+import java.util.Collections;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
 
 import com.emedical.booking.dto.Medical_recorDTO.Medical_recordReponse;
 import com.emedical.booking.entity.Medical_records;
+import com.emedical.booking.entity.User;
 import com.emedical.booking.repository.Medical_recordsRepository;
 import com.emedical.booking.repository.UserRepository;
 
@@ -24,15 +27,15 @@ public class Medical_recordsService {
 
     public Medical_records createMedical(Medical_recordReponse medical_recordReponse) {
         log.info("Creating new medical record for patient ID: {}", medical_recordReponse.getPatient_id());
-        if (medical_recordReponse.getPatient_id() != null && !userRepository.existsById(medical_recordReponse.getPatient_id())) {
-            throw new RuntimeException("Không tìm thấy thông tin bệnh nhân");
+        User patient = null;
+        if (medical_recordReponse.getPatient_id() != null) {
+            patient = userRepository.findById(medical_recordReponse.getPatient_id())
+                    .orElseThrow(() -> new RuntimeException("Không tìm thấy thông tin bệnh nhân"));
         }
 
         String patientName = medical_recordReponse.getUsername();
-        if (patientName == null && medical_recordReponse.getPatient_id() != null) {
-            patientName = userRepository.findById(medical_recordReponse.getPatient_id())
-                    .map(u -> u.getFull_name() != null ? u.getFull_name() : u.getUsername())
-                    .orElse(null);
+        if ((patientName == null || patientName.isBlank()) && patient != null) {
+            patientName = patient.getFull_name() != null ? patient.getFull_name() : patient.getUsername();
         }
 
         Medical_records medical_records = Medical_records.builder()
@@ -45,22 +48,26 @@ public class Medical_recordsService {
                 .treatment(medical_recordReponse.getTreatment())
                 .prescription(medical_recordReponse.getPrescription())
                 .note(medical_recordReponse.getNote())
-                .created_at(java.time.LocalDate.now().toString())
+                .created_at(LocalDate.now().toString())
                 .build();
 
         return medical_recordsRepository.save(medical_records);
     }
 
-    public List<Medical_records> readMedical_records(Medical_recordReponse medical_recordReponse) {
-        if (medical_recordReponse != null && medical_recordReponse.getMedical_recordId() != null) {
-            log.info("Reading medical record ID: {}", medical_recordReponse.getMedical_recordId());
+    public List<Medical_records> readMedicalRecords(Long medicalRecordId) {
+        if (medicalRecordId != null) {
+            log.info("Reading medical record ID: {}", medicalRecordId);
             return medical_recordsRepository
-                    .findById(medical_recordReponse.getMedical_recordId())
-                    .map(java.util.Collections::singletonList)
-                    .orElse(java.util.Collections.emptyList());
+                    .findById(medicalRecordId)
+                    .map(Collections::singletonList)
+                    .orElse(Collections.emptyList());
         }
         log.info("Reading all medical records");
         return medical_recordsRepository.findAll();
+    }
+
+    public List<Medical_records> readMedical_records(Medical_recordReponse medical_recordReponse) {
+        return readMedicalRecords(medical_recordReponse != null ? medical_recordReponse.getMedical_recordId() : null);
     }
 
     public Medical_records updatMedical_records(Medical_recordReponse medical_recordReponse) {
@@ -82,13 +89,17 @@ public class Medical_recordsService {
         return medical_recordsRepository.save(medical_records);
     }
 
-    public Medical_records deleteMedical_records(Medical_recordReponse medical_RecordReponse) {
-        log.info("Deleting medical record ID: {}", medical_RecordReponse.getMedical_recordId());
+    public Medical_records deleteMedicalRecord(Long medicalRecordId) {
+        log.info("Deleting medical record ID: {}", medicalRecordId);
         Medical_records medical_records = medical_recordsRepository
-                .findById(medical_RecordReponse.getMedical_recordId())
+                .findById(medicalRecordId)
                 .orElseThrow(() -> new RuntimeException("Hồ sơ bệnh án không tồn tại"));
 
         medical_recordsRepository.delete(medical_records);
         return medical_records;
+    }
+
+    public Medical_records deleteMedical_records(Medical_recordReponse medical_RecordReponse) {
+        return deleteMedicalRecord(medical_RecordReponse != null ? medical_RecordReponse.getMedical_recordId() : null);
     }
 }

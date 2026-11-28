@@ -8,10 +8,11 @@ import org.springframework.stereotype.Repository;
 import com.emedical.booking.entity.User;
 
 @Repository
-
 public interface UserRepository extends JpaRepository<User, Long> {
 
     Optional<User> findByUsername(String username);
+
+    Optional<User> findByEmailIgnoreCase(String email);
 
     boolean existsByUsername(String username);
 }
